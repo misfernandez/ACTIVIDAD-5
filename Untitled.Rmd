@@ -1,0 +1,167 @@
+---
+title: "Actividad 5"
+output: github_document
+---
+
+## INICIO DE LAS BIBLIOTECAS
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+sanguche <- read.csv("/Users/misaelfernandez/Desktop/Universidad/Mineria/ayudantia 1/Ayudantia_DataMining01_2021/Ayudantia 5/sanguchez.csv", sep = ";")
+head(sanguche)
+```
+
+```{r}
+summary(sanguche)
+```
+```{r}
+# eliminas las variables que vamos a trabajar
+sanguche1 <- subset(sanguche, select = -c(texto, url, Local, Direccion, Ingredientes))
+summary(sanguche1)
+```
+
+
+##pasar precio a numerico y sacar datos NA
+```{r}
+sanguche1$Precio <- as.numeric(gsub('[$.]', '', sanguche1$Precio))
+sanguche1.1 <- na.omit(sanguche1)
+summary(sanguche1.1)
+```
+
+##escalar los datos para poder trabajar con ellos
+```{r}
+sangu <- sanguche1.1 [, colnames(sanguche1.1) %in% c("Precio", "nota")]
+
+escal_sangu = scale(sanguche1.1) %>% as_tibble()
+
+escal_sangu %>% summary()
+
+```
+```{r}
+modelo_kmeans <- kmeans(escal_sangu, centers = 10)
+modelo_kmeans2 <- kmeans(sanguche1.1, centers = 10)
+
+# creo la variable cluster en la tabla escal_data_pokda
+escal_sangu$clus <- modelo_kmeans$cluster %>% as.factor()
+sanguche1.1$clus <- modelo_kmeans2$cluster %>% as.factor()
+
+ggplot(escal_sangu, aes(Precio, nota, color=clus)) +
+  geom_point(alpha=0.5, show.legend = T) +
+  theme_bw()
+```
+
+```{r}
+ggplot(sanguche1.1, aes(Precio, nota, color=clus)) +
+  geom_point(alpha=0.5, show.legend = T) +
+  theme_bw()
+```
+```{r}
+info_clus <- modelo_kmeans$centers
+info_clus2 <- modelo_kmeans2$centers
+
+info_clus
+```
+
+
+```{r}
+
+info_clus2
+```
+
+
+
+## Evolución suma de cuadrados intra-cluster en la medida que aumentamos el numero de k
+```{r}
+SSinterior <- numeric(30)
+
+for(k in 1:30){
+  modelo <- kmeans(escal_sangu, centers = k)
+  SSinterior[k] <- modelo$tot.withinss
+}
+
+plot(SSinterior)
+```
+
+## Inspeccion visual
+```{r}
+escal_sangu$clus <- as.numeric(escal_sangu$clus)
+sanguche1.1$clus <- as.numeric(sanguche1.1$clus)
+
+# uso distancia euclidiana
+tempDist <- dist(escal_sangu) %>% as.matrix()
+
+#reordeno filas y columnas en base al cluster obtenido
+index <- sort(modelo_kmeans$cluster, index.return=TRUE)
+
+#reordeno filas y columnas en base al cluster obtenido
+tempDist <- tempDist[index$ix,index$ix]
+rownames(tempDist) <- c(1:nrow(escal_sangu))
+colnames(tempDist) <- c(1:nrow(escal_sangu))
+
+image(tempDist)
+```
+```{r}
+library(factoextra)
+
+#Calcula el hopkins statistic 
+res <- get_clust_tendency(escal_sangu, n = 30, graph = FALSE)
+res2 <- get_clust_tendency(sanguche1.1, n = 30, graph = FALSE)
+
+print(res)
+print(res2)
+```
+
+```{r}
+#Correlation
+#construyo matriz de correlacion ideal (cada entidad correlaciona 1 con su cluster)
+tempMatrix2 <- matrix(0, nrow = nrow(escal_sangu), ncol = nrow(escal_sangu))
+tempMatrix2[which(index$x==1), which(index$x==1)]  <- 1
+tempMatrix2[which(index$x==2), which(index$x==2)]  <- 1
+tempMatrix2[which(index$x==3), which(index$x==3)]  <- 1
+tempMatrix2[which(index$x==4), which(index$x==4)]  <- 1
+tempMatrix2[which(index$x==5), which(index$x==5)]  <- 1
+tempMatrix2[which(index$x==6), which(index$x==3)]  <- 1
+tempMatrix2[which(index$x==7), which(index$x==4)]  <- 1
+tempMatrix2[which(index$x==8), which(index$x==5)]  <- 1
+tempMatrix2[which(index$x==9), which(index$x==3)]  <- 1
+tempMatrix2[which(index$x==10), which(index$x==4)]  <- 1
+
+
+#construyo matriz de disimilitud
+tempDist_2 <- 1/(1+tempMatrix2)
+
+#Calcula correlacion 
+cor2 <- cor(tempMatrix2[upper.tri(tempMatrix2)],tempDist_2[upper.tri(tempDist_2)])
+
+print(cor2)
+```
+
+## Indice de cohesión y el de separación.
+
+```{r}
+library(flexclust)
+
+withinCluster <- numeric(10)
+for (i in 1:10){
+  tempdata <- escal_sangu[which(modelo_kmeans$cluster == i),]
+  withinCluster[i] <- sum(dist2(tempdata,colMeans(tempdata))^2)
+}
+cohesion = sum(withinCluster)
+#es equivalente a model$tot.withinss en k-means
+print(c(cohesion, modelo_kmeans$tot.withinss))
+```
+
+## Coeficiente de silueta
+```{r}
+library(cluster)
+
+coefSil <- silhouette(modelo_kmeans$cluster,dist(escal_sangu))
+summary(coefSil)
+
+```
+
+
+
+
+
